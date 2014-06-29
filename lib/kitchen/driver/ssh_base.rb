@@ -34,6 +34,7 @@ module Kitchen
 
       default_config :sudo, true
       default_config :port, 22
+      default_config :compression, 'gzip'
 
       def create(state)
         raise ClientError, "#{self.class}#create must be implemented"
@@ -124,13 +125,15 @@ module Kitchen
 
       def transfer_path(locals, remote, connection)
         return if locals.nil? || Array(locals).empty?
-
         info('Compress files before transferring')
-        pack(locals) do |file|
-          connection.upload_path!(file.path, remote)
-          filename = File.basename(file.path)
+        compressor.compress(locals) do |archive|
+          filename = File.basename(archive.path)
+          debug('Upload compression supports')
+          compressor.supports.each { |support| connection.upload_path!(support.to_s, remote) }
           info("Transferring files to #{instance.to_str}")
-          run_remote("cd #{remote} && tar xvfz #{filename} > /dev/null && rm #{filename}", connection)
+          connection.upload_path!(archive.path, remote)
+          debug('Decompressing files remotely')
+          run_remote("cd #{remote} && #{compressor.unpack_command(filename)} && rm #{filename}", connection)
         end
         debug('Transfer complete')
       rescue SSHFailed, Net::SSH::Exception => ex
@@ -138,37 +141,15 @@ module Kitchen
       end
 
       def wait_for_sshd(hostname, username = nil, options = {})
-        SSH.new(hostname, username, { :logger => logger }.merge(options)).wait
+        SSH.new(hostname, username, {:logger => logger}.merge(options)).wait
       end
 
-      def pack(locals)
-        tar_archive = Tempfile.new(['sandbox', '.tar'])
-        Gem::Package::TarWriter.new(tar_archive) do |tar|
-          locals.each do |path|
-            base_path = Pathname.new(path).parent
-            files = File.file?(path) ? Array(path) : Dir.glob("#{path}/**/*")
-            files.each do |file|
-              mode = File.stat(file).mode
-              relative_path = Pathname.new(file).relative_path_from(base_path)
-              if File.directory?(file)
-                tar.mkdir(relative_path.to_s, mode)
-              else
-                tar.add_file(relative_path.to_s, mode) do |tf|
-                  File.open(file, 'rb') { |f| tf.write f.read }
-                end
-              end
-            end
-          end
+      def compressor
+        @compressor ||= begin
+          str_const = Thor::Util.camel_case(config[:compression])
+          klass = Kitchen::Driver.const_get("Compression::#{str_const}")
+          klass.new(instance)
         end
-        tar_archive.rewind
-        tgz_archive = Tempfile.new(['sandbox', '.tar.gz'])
-        gzip = Zlib::GzipWriter.new(tgz_archive)
-        gzip.write tar_archive.read
-        gzip.close
-        yield(tgz_archive)
-      ensure
-        tar_archive.unlink if tar_archive
-        tgz_archive.unlink if tgz_archive
       end
     end
   end
