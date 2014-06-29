@@ -2,6 +2,7 @@ module Kitchen
   module Driver
     module Compression
       class Base
+
         attr_accessor :instance
         def initialize(instance)
           @instance = instance

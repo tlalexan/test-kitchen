@@ -5,7 +5,7 @@ require 'rubygems/package/tar_writer'
 module Kitchen
   module Driver
     module Compression
-      class Gzip < Base
+      class Gzip < Tar
         def initialize(instance)
           super
           raise 'Gzip compressor is not supported on windows platform!' if RUBY_PLATFORM =~ /mswin|mingw|windows/
@@ -17,31 +17,6 @@ module Kitchen
               block.call(tgz)
             end
           end
-        end
-
-        def tar(locals, &block)
-          tarball = Tempfile.new(%w(sandbox .tar))
-          Gem::Package::TarWriter.new(tarball) do |archive|
-            locals.each do |path|
-              base_path = Pathname.new(path).parent
-              files = File.file?(path) ? Array(path) : Dir.glob("#{path}/**/*")
-              files.each do |file|
-                mode = File.stat(file).mode
-                relative_path = Pathname.new(file).relative_path_from(base_path)
-                if File.directory?(file)
-                  archive.mkdir(relative_path.to_s, mode)
-                else
-                  archive.add_file(relative_path.to_s, mode) do |tf|
-                    File.open(file, 'rb') { |f| tf.write f.read }
-                  end
-                end
-              end
-            end
-          end
-          tarball.rewind
-          block.call(tarball)
-        ensure
-          tarball.unlink if tarball
         end
 
         def gzip(tar, &block)

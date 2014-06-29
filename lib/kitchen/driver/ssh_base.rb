@@ -126,14 +126,18 @@ module Kitchen
       def transfer_path(locals, remote, connection)
         return if locals.nil? || Array(locals).empty?
         info('Compress files before transferring')
-        compressor.compress(locals) do |archive|
-          filename = File.basename(archive.path)
+        compressor.compress(locals) do |file|
+          path = file.is_a?(String) ? file : file.path
+          filename = File.basename(path)
           debug('Upload compression supports')
           compressor.supports.each { |support| connection.upload_path!(support.to_s, remote) }
           info("Transferring files to #{instance.to_str}")
-          connection.upload_path!(archive.path, remote)
-          debug('Decompressing files remotely')
-          run_remote("cd #{remote} && #{compressor.unpack_command(filename)} && rm #{filename}", connection)
+          connection.upload_path!(path, remote)
+          unpack_command = compressor.unpack_command(filename)
+          if unpack_command
+            debug('Decompressing files remotely')
+            run_remote("cd #{remote} && #{unpack_command} && rm #{filename}", connection)
+          end
         end
         debug('Transfer complete')
       rescue SSHFailed, Net::SSH::Exception => ex
