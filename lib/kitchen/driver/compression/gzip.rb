@@ -30,8 +30,7 @@ module Kitchen
         end
 
         def unpack_command(filename, dest = '.')
-          is_win? ? "chmod +x ./7za.exe && ./7za.exe x #{filename} -so | ./7za.exe x -aoa -si -ttar -o#{dest} > /dev/null"
-          : "tar xfz #{filename} -C #{dest}"
+          is_win? ? "chmod +x ./7za.exe && ./7za.exe x #{filename} -so | ./7za.exe x -aoa -si -ttar -o#{dest} > /dev/null" : "tar xfz #{filename} -C #{dest}"
         end
       end
     end
