@@ -19,7 +19,7 @@ Gem::Specification.new do |gem|
   gem.files         = `git ls-files`.split($INPUT_RECORD_SEPARATOR)
   gem.executables   = %w[kitchen]
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
-<<<<<<< HEAD
+
   gem.require_paths = ["lib"]
 
   gem.required_ruby_version = ">= 1.9.1"
@@ -29,7 +29,6 @@ Gem::Specification.new do |gem|
   gem.add_dependency "net-ssh",         "~> 2.7"
   gem.add_dependency "safe_yaml",       "~> 1.0"
   gem.add_dependency "thor",            "~> 0.18"
-  gem.add_dependency 'seven_zip_ruby',            '~> 1.2.3'
 
   gem.add_development_dependency "pry"
   gem.add_development_dependency "winrm-transport", "~> 1.0"
