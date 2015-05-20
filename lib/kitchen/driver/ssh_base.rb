@@ -15,6 +15,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'pathname'
+require 'rubygems'
+require 'rubygems/package'
+require 'rubygems/package/tar_writer'
 
 require "thor/util"
 
@@ -52,6 +56,7 @@ module Kitchen
 
       default_config :sudo, true
       default_config :port, 22
+      default_config :compression, 'gzip'
 
       # Creates a new Driver object using the provided configuration data
       # which will be merged with any default configuration.
@@ -242,7 +247,7 @@ module Kitchen
       def env_cmd(cmd)
         return if cmd.nil?
         env = "env"
-        env << " http_proxy=#{config[:http_proxy]}"   if config[:http_proxy]
+        env << " http_proxy=#{config[:http_proxy]}" if config[:http_proxy]
         env << " https_proxy=#{config[:https_proxy]}" if config[:https_proxy]
 
         env == "env" ? cmd : "#{env} #{cmd}"
@@ -271,10 +276,21 @@ module Kitchen
       # @api private
       def transfer_path(locals, remote, connection)
         return if locals.nil? || Array(locals).empty?
-
-        info("Transferring files to #{instance.to_str}")
-        locals.each { |local| connection.upload_path!(local, remote) }
-        debug("Transfer complete")
+        info('Compress files before transferring')
+        compressor.compress(locals) do |file|
+          path = file.is_a?(String) ? file : file.path
+          filename = File.basename(path)
+          debug('Upload compression supports')
+          compressor.supports.each { |support| connection.upload_path!(support.to_s, remote) }
+          info("Transferring files to #{instance.to_str}")
+          connection.upload_path!(path, remote)
+          unpack_command = compressor.unpack_command(filename)
+          if unpack_command
+            debug('Decompressing files remotely')
+            run_remote("cd #{remote} && #{unpack_command} && rm #{filename}", connection)
+          end
+        end
+        debug('Transfer complete')
       rescue SSHFailed, Net::SSH::Exception => ex
         raise ActionFailed, ex.message
       end
@@ -333,6 +349,14 @@ module Kitchen
       # @return [Busser] a busser
       def busser
         instance.verifier
+      end
+
+      def compressor
+        @compressor ||= begin
+          str_const = Thor::Util.camel_case(config[:compression])
+          klass = Kitchen::Driver.const_get("Compression::#{str_const}")
+          klass.new(instance)
+        end
       end
     end
   end

@@ -23,3 +23,5 @@ tmp
 .kitchen/
 .kitchen.yml
 .kitchen.local.yml
+/.idea/
+*.iml
